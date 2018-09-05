@@ -11,3 +11,5 @@ target
 .idea
 *.iml
 .DS_Store
+/juseppe-cli/release-history.json
+/juseppe-cli/update-center.json
