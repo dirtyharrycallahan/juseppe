@@ -20,7 +20,6 @@ import java.util.stream.Stream;
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
-import static ru.lanwen.jenkins.juseppe.props.Props.populated;
 
 /**
  * @author Merkushev Kirill (github: lanwen)

@@ -1,5 +1,7 @@
 package ru.lanwen.jenkins.juseppe.gen;
 
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -10,7 +12,9 @@ import ru.lanwen.jenkins.juseppe.beans.Developer;
 import ru.lanwen.jenkins.juseppe.beans.Plugin;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -57,18 +61,20 @@ public class HPI {
         JarFile jarFile = new JarFile(file);
         long timestamp = jarFile.getEntry(MANIFEST_PATH).getTime();
 
-        Plugin hpi = HPI.from(jarFile.getManifest().getMainAttributes(), timestamp);
+        Plugin hpi = HPI.from(file, jarFile.getManifest().getMainAttributes(), timestamp);
 
         String wiki = getWiki(file);
         if (StringUtils.isNotBlank(wiki)) {
             hpi.setWiki(wiki);
         }
-
+        jarFile.close();
         return hpi.withExcerpt(getExcerpt(file));
     }
 
-    private static Plugin from(Attributes attributes, long timestamp) throws IOException {
-        return new Plugin()
+    private static Plugin from(final File file, Attributes attributes, long timestamp) throws IOException {
+    	final Digests digests = digests(file);
+    	
+    	return new Plugin()
                 .withReleaseTimestamp(releaseTimestampDateFormat().format(timestamp))
                 .withBuildDate(buildDateTimeFormat().format(timestamp))
                 .withName(
@@ -87,7 +93,29 @@ public class HPI {
                 .withRequiredCore(attributes.getValue(PLUGIN_REQUIRED_JENKINS_VERSION))
                 .withBuiltBy(attributes.getValue(PLUGIN_BUILT_BY))
                 .withDependencies(getDependencies(attributes))
-                .withDevelopers(getDevelopers(attributes));
+                .withDevelopers(getDevelopers(attributes))
+                .withSha1(digests.sha1)
+                .withSha512(digests.sha512);
+    }
+    
+    private static Digests digests(final File file) {
+        final Digests digests = new Digests();
+        try (FileInputStream fin = new FileInputStream(file)) {
+            final MessageDigest sha1 = DigestUtils.getSha1Digest();
+            final MessageDigest sha512 = DigestUtils.getSha512Digest();
+            final byte[] buf = new byte[2048];
+            int len;
+            while ((len = fin.read(buf, 0, buf.length)) >= 0) {
+                sha1.update(buf, 0, len);
+                sha512.update(buf, 0, len);
+            }
+            
+            digests.sha1 = new String(Base64.encodeBase64(sha1.digest()), "UTF-8");
+            digests.sha512 = new String(Base64.encodeBase64(sha512.digest()), "UTF-8");
+        } catch (final Exception ex) {
+            LOG.error(ex.getMessage(), ex);
+        }
+        return digests;
     }
 
     private static SimpleDateFormat releaseTimestampDateFormat() {
@@ -179,4 +207,10 @@ public class HPI {
             return "";
         }
     }
+    
+    private static class Digests {
+        private String sha1;
+        private String sha512;
+    }
+    
 }
